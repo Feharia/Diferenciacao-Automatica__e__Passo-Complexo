@@ -1,0 +1,618 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\graphicspath{{../relatorio/figuras/}}
+
+% ---------- aparência ----------
+\definecolor{azul}{HTML}{1F3A5F}
+\definecolor{laranja}{HTML}{C8553D}
+\definecolor{verde}{HTML}{2E7D4F}
+\definecolor{cinza}{HTML}{6B7280}
+\usetheme{default}
+\setbeamercolor{frametitle}{fg=azul}
+\setbeamercolor{title}{fg=azul}
+\setbeamercolor{structure}{fg=azul}
+\setbeamercolor{alerted text}{fg=laranja}
+\setbeamercolor{block title}{bg=azul,fg=white}
+\setbeamercolor{block body}{bg=azul!6}
+\setbeamercolor{block title alerted}{bg=laranja,fg=white}
+\setbeamercolor{block body alerted}{bg=laranja!7}
+\setbeamercolor{block title example}{bg=verde,fg=white}
+\setbeamercolor{block body example}{bg=verde!7}
+\setbeamerfont{frametitle}{series=\bfseries,size=\Large}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{blocks}[rounded]
+\setbeamertemplate{footline}{%
+  \hbox{\hspace{1em}\color{cinza}\tiny Diferenciação automática e passo complexo
+  \hfill\insertframenumber/\inserttotalframenumber\hspace{1em}}\vspace{0.6em}}
+\setbeamertemplate{section page}{%
+  \centering\vfill{\color{cinza}\small Parte \insertsectionnumber}\\[0.4em]
+  {\usebeamerfont{title}\color{azul}\Huge\bfseries\insertsectionhead}\vfill}
+\AtBeginSection{\begin{frame}[plain,noframenumbering]\sectionpage\end{frame}}
+
+\lstset{language=Python, basicstyle=\ttfamily\footnotesize, keywordstyle=\color{azul}\bfseries,
+  commentstyle=\color{verde}, stringstyle=\color{laranja}, columns=fullflexible,
+  showstringspaces=false,
+  literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1 {ã}{{\~a}}1
+           {õ}{{\~o}}1 {ç}{{\c c}}1 {ê}{{\^e}}1 {â}{{\^a}}1 {ε}{{$\varepsilon$}}1 {²}{{$^2$}}1 {·}{{$\cdot$}}1}
+
+\newcommand{\fl}{\operatorname{fl}}
+\renewcommand{\Im}{\operatorname{Im}}
+\renewcommand{\Re}{\operatorname{Re}}
+
+\title{Diferenciação automática, passo complexo\\e diferenças finitas}
+\subtitle{Por que só os dois primeiros atingem o arredondamento unitário}
+\author{Felipe M. Figueira \and Lucas Cavalhiosa}
+\date{Seminário --- 2026}
+
+\begin{document}
+
+\begin{frame}[plain,noframenumbering]
+  \titlepage
+\end{frame}
+
+% =====================================================================
+\section{Motivação}
+
+\begin{frame}{A pergunta central}
+  \begin{block}{}
+    \centering\large
+    Por que diferenças finitas \alert{nunca} atingem erro $u$,\\
+    e o que exatamente o passo complexo e a AD fazem para atingi-lo?\\[0.5em]
+    \normalsize Qual é o custo em \textbf{generalidade} e em \textbf{implementação}?
+  \end{block}
+  \vspace{1em}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    Quatro formas de obter derivadas:
+    \begin{enumerate}
+      \item derivação manual
+      \item derivação simbólica
+      \item \alert{diferenças finitas}
+      \item \alert{diferenciação automática (AD)}
+    \end{enumerate}
+    \column{0.45\textwidth}
+    \textbf{Ponte entre 3 e 4:} o passo complexo (Squire--Trapp 1998; Martins et al.\ 2003).
+    \vspace{0.6em}
+
+    Usos: Newton, otimização, sensibilidade, redes neurais.
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Modelo de ponto flutuante}
+  Para números de máquina $a,b$ e $\circ\in\{+,-,\times,/\}$:
+  \[
+    \fl(a\circ b) = (a\circ b)(1+\delta),\qquad |\delta|\le u = 2^{-53}\approx 1{,}11\times10^{-16}.
+  \]
+  \begin{itemize}
+    \item Avaliar $f$ custa um erro relativo da ordem de $u$:\quad $\hat f(x) = f(x)(1+\delta_f)$.
+    \item Isso é o \textbf{piso}: nenhum método em precisão dupla faz, em geral, melhor que $\sim u$.
+    \item Meta: um método de derivação cujo erro seja da \emph{mesma ordem} que o erro de avaliar $f$.
+  \end{itemize}
+  \vspace{0.5em}
+  \begin{exampleblock}{Exemplo usado em todo o seminário}
+    \centering $f(x) = \dfrac{e^x}{\cos^3x+\sin^3x}$,\qquad $x = 1{,}5$
+  \end{exampleblock}
+\end{frame}
+
+% =====================================================================
+\section{Diferenças finitas}
+
+\begin{frame}{Diferença progressiva: duas fontes de erro}
+  Por Taylor:
+  \[
+    D_+(h) = \frac{f(x+h)-f(x)}{h} = f'(x) + \underbrace{\tfrac{h}{2}f''(\xi)}_{\text{truncamento}}
+  \]
+  Em ponto flutuante, cada $f$ tem erro absoluto $\le u|f|$, e $f(x+h)\approx f(x)$:
+  \[
+    |\hat D_+(h)-f'(x)| \lesssim \frac{h}{2}|f''| + \alert{\frac{2u|f|}{h}}
+  \]
+  \begin{alertblock}{Cancelamento catastrófico}
+    Os primeiros dígitos de $f(x+h)$ e $f(x)$ coincidem e se anulam. Sobram só os dígitos contaminados por arredondamento, e a divisão por $h$ os amplifica.
+  \end{alertblock}
+  \[
+    h^\ast = 2\sqrt{u|f|/|f''|},\qquad E(h^\ast) = 2\sqrt{u|f||f''|} = O(u^{1/2})
+  \]
+\end{frame}
+
+\begin{frame}{Aumentar a ordem só ajuda até certo ponto}
+  \renewcommand{\arraystretch}{1.5}
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    Fórmula & erro total $E(h)$ & $h^\ast$ & melhor erro \\
+    \midrule
+    progressiva & $\frac{h}{2}|f''| + \frac{2u|f|}{h}$ & $\sim u^{1/2}$ & $O(u^{1/2})$ \\
+    centrada & $\frac{h^2}{6}|f'''| + \frac{u|f|}{h}$ & $\sim u^{1/3}$ & $O(u^{2/3})$ \\
+    Richardson & $\frac{h^4}{480}|f^{(5)}| + \frac{3u|f|}{h}$ & $\sim u^{1/5}$ & $O(u^{4/5})$ \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+
+  \begin{block}{Resultado geral (no modelo de erro acima, com $f^{(p+1)}(x)\ne0$)}
+    Ordem $p$: \ $E(h)\approx C_ph^p + K_p\,u|f|/h$ \ $\Rightarrow$ \ $h^\ast\asymp u^{1/(p+1)}$, \ $E(h^\ast)\asymp u^{p/(p+1)}$.
+    \\[0.3em]
+    Como $p/(p+1)<1$, \alert{nenhuma} fórmula de ordem finita chega a $O(u)$.
+  \end{block}
+\end{frame}
+
+\begin{frame}{De onde vem o $u/h$? Da subtração obrigatória}
+  \begin{itemize}
+    \item Fórmula de diferenças: $D(h) = \frac1h\sum_k c_k\,f(x+kh)$.
+    \item Para ser exata em constantes, precisa de $\sum_k c_k = 0$.
+    \item $\sum_k c_k=0$ \ $\Longrightarrow$ \ \alert{subtrair valores próximos de $f$} \ $\Longrightarrow$ \ termo $u|f|/h$.
+  \end{itemize}
+  \vspace{0.6em}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \begin{block}{Truncamento}
+      Cai com $h$: inclinação $+p$ em log-log.
+    \end{block}
+    \column{0.48\textwidth}
+    \begin{alertblock}{Cancelamento}
+      Cresce quando $h\to0$: inclinação $-1$ em log-log.
+    \end{alertblock}
+  \end{columns}
+  \vspace{0.6em}
+  Mais um detalhe: se $h$ fica abaixo de meio ulp de $x$, então $\fl(x+h)=x$ e a fórmula devolve exatamente \textbf{zero}.
+\end{frame}
+
+\begin{frame}{O ``V'' do erro (experimento C1)}
+  \centering
+  \includegraphics[height=0.78\textheight]{c1_erro_vs_h.pdf}\\
+  \small Erro relativo de $f'(1{,}5)$ para $h\in[10^{-20},10^{-1}]$. Pontilhado: modelos teóricos; tracejado: $h^\ast$.
+\end{frame}
+
+\begin{frame}{Teoria $\times$ experimento}
+  \centering
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{lcccc}
+    \toprule
+    Método & $p$ & $h^\ast$ teórico & erro mín.\ observado & previsão $u^{p/(p+1)}$ \\
+    \midrule
+    progressiva & 1 & $1{,}2\times10^{-8}$ & $1{,}3\times10^{-9}$ & $10^{-8}$ \\
+    centrada & 2 & $3{,}0\times10^{-6}$ & $8{,}1\times10^{-12}$ & $2\times10^{-11}$ \\
+    Richardson & 4 & $6{,}4\times10^{-4}$ & $4{,}6\times10^{-14}$ & $2\times10^{-13}$ \\
+    \alert{passo complexo} & 2 & $h\lesssim6{,}5\times10^{-9}$ & $\lesssim u$ & $u$ \\
+    \alert{dual} & --- & --- & $0$ & $u$ \\
+    \bottomrule
+  \end{tabular}
+  \vspace{1em}
+  \begin{itemize}
+    \item As três diferenças finitas têm a \textbf{mesma perna esquerda} $u|f|/h$: aumentar a ordem só abaixa o vértice do ``V''.
+    \item O passo complexo tem a perna direita da centrada, mas \alert{não tem perna esquerda}.
+  \end{itemize}
+\end{frame}
+
+% =====================================================================
+\section{Passo complexo}
+
+\begin{frame}{Dedução (A1)}
+  Se $f$ é real no eixo real e analítica perto de $x$:
+  \[
+    f(x+ih) = f(x) + ihf'(x) - \frac{h^2}{2}f''(x) - i\frac{h^3}{6}f'''(x) + \frac{h^4}{24}f^{(4)}(x) + \cdots
+  \]
+  Separando partes real e imaginária:
+  \begin{align*}
+    \Im f(x+ih) &= hf'(x) - \tfrac{h^3}{6}f'''(x) + O(h^5)\\
+    \Re f(x+ih) &= f(x) - \tfrac{h^2}{2}f''(x) + O(h^4)
+  \end{align*}
+  \begin{block}{}
+    \centering
+    $\displaystyle f'(x) = \frac{\Im f(x+ih)}{h} + \frac{h^2}{6}f'''(x) + O(h^4)$
+  \end{block}
+  Truncamento $O(h^2)$, igual ao da centrada em módulo e com sinal oposto\\
+  ({\small $h=10^{-3}$: $\mp 9{,}472\times10^{-6}$ de erro absoluto nos dois métodos}).
+\end{frame}
+
+\begin{frame}{Por que não aparece o termo $u/h$}
+  \small
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{Centrada}: \ $\dfrac{\alert{f(x+h)-f(x-h)}}{2h}$
+    \begin{itemize}
+      \item dois números de tamanho $|f|$
+      \item resultado de tamanho $2h|f'|$
+      \item erro absoluto $u|f|$ vira erro relativo $u|f|/(h|f'|)$
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Passo complexo}: \ $\dfrac{\Im f(x+ih)}{h}$
+    \begin{itemize}
+      \item \textbf{nenhuma subtração}
+      \item $hf'(x)$ \emph{é} a parte imaginária de um único número, com erro relativo $O(u)$
+      \item dividir por $h$ não amplifica erro relativo
+    \end{itemize}
+  \end{columns}
+  \vspace{0.3em}
+  \begin{exampleblock}{Consequência}
+    $E_{cs}(h)\approx \frac{h^2}{6}|f'''| + c\,u|f'|$. Para $h\lesssim 6{,}5\times10^{-9}$ o erro relativo de truncamento já é menor que $u$.
+    \textbf{Não há compromisso}: $h=10^{-30}$ é uma escolha usual.
+  \end{exampleblock}
+\end{frame}
+
+\begin{frame}[fragile]{Uma linha de código}
+\begin{lstlisting}
+def deriv_complexa(f, x, h=1e-30):
+    return f(x + 1j * h).imag / h
+\end{lstlisting}
+  \vspace{0.5em}
+  \begin{itemize}
+    \item O termo $-\tfrac{h^2}{2}f''$ vai para a parte \emph{real} e não interfere.
+    \item Funciona em código existente: basta que ele aceite números complexos.
+    \item \textbf{Ressalva:} se a própria derivada for mal condicionada (soma de parcelas grandes que se anulam), há cancelamento \emph{interno}. Isso é do problema e afeta igualmente a AD.
+    \item Cuidado com $h$ extremo ($10^{-200}$): qualquer operação que forme $h^2$ no caminho (módulo, $z\bar z$) dá \emph{underflow}.
+  \end{itemize}
+\end{frame}
+
+% =====================================================================
+\section{Números duais e AD}
+
+\begin{frame}{A álgebra dos duais (A2)}
+  $\mathbb D = \{a+b\varepsilon\}$ com \alert{$\varepsilon^2=0$}, \ $\varepsilon\ne0$.
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \column{0.46\textwidth}
+    \textbf{Produto}
+    \[ (a+b\varepsilon)(c+d\varepsilon) = ac + (ad+bc)\varepsilon \]
+    Com $a=p(x),\ b=p'(x),\ c=q(x),\ d=q'(x)$:\\
+    parte dual $= pq'+p'q = (pq)'$.\\
+    \alert{Regra do produto.}
+    \vspace{0.6em}
+
+    \textbf{Quociente}
+    \[ \frac{a+b\varepsilon}{c+d\varepsilon} = \frac ac + \frac{bc-ad}{c^2}\varepsilon \]
+    \column{0.50\textwidth}
+    \textbf{Funções elementares}
+    \[ g(a+b\varepsilon) = \sum_k \tfrac{g^{(k)}(a)}{k!}(b\varepsilon)^k = g(a)+g'(a)\,b\,\varepsilon \]
+    A série termina \emph{exatamente}: sem resto.\\[0.3em]
+    Com $a=v(x)$, $b=v'(x)$: parte dual $=(g\circ v)'(x)$.\\
+    \alert{Regra da cadeia.}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Programas inteiros: o modo direto}
+  \begin{block}{Proposição}
+    Execute o programa de $f$ com $v_0 = x + 1\cdot\varepsilon$. Cada variável intermediária vale $v_j + \dot v_j\varepsilon$ com $\dot v_j = \mathrm dv_j/\mathrm dx$. Em particular, a saída é $f(x)+f'(x)\varepsilon$.
+  \end{block}
+  \textbf{Prova por indução} na ordem de execução (cada $v_j$ só usa $v_i,v_k$ com $i,k<j$):
+  \begin{enumerate}
+    \item \textbf{Álgebra} (o que o computador faz): define-se
+      $\phi(a+b\varepsilon,\,c+d\varepsilon) := \phi(a,c) + [\partial_1\phi\, b + \partial_2\phi\, d]\,\varepsilon$.
+    \item \textbf{Cálculo} (o que queremos): pela regra da cadeia multivariável,
+      $\dfrac{\mathrm dv_j}{\mathrm dx} = \partial_1\phi_j\,\dot v_i + \partial_2\phi_j\,\dot v_k$.
+  \end{enumerate}
+  Os dois coincidem. \alert{A aritmética dual aplica a regra da cadeia um nó de cada vez.}
+  \vspace{0.4em}
+
+  {\small Laços e \texttt{if} só escolhem \emph{quais} operações rodam: o resultado é a derivada do caminho percorrido. Ela só coincide com $f'(x)$ se o caminho for o mesmo numa vizinhança de $x$.}
+\end{frame}
+
+\begin{frame}{Erro dos duais}
+  \begin{itemize}
+    \item Não há $h$ \ $\Rightarrow$ \ não há truncamento.
+    \item Não há subtração de valores de $f$ \ $\Rightarrow$ \ não há $u/h$.
+    \item Cada operação na parte dual tem erro relativo $O(u)$, como a avaliação da própria $f$.
+  \end{itemize}
+  \vspace{0.6em}
+  \begin{exampleblock}{Resultado}
+    Erro da derivada da mesma ordem do erro de calcular $f$, o que em geral não se melhora sem aumentar a precisão.
+  \end{exampleblock}
+  \vspace{0.6em}
+  \centering
+  \begin{tikzpicture}[node distance=1.2cm, every node/.style={font=\small}]
+    \node[draw=azul,rounded corners,fill=azul!8,minimum width=2.4cm] (x) {$x+1\cdot\varepsilon$};
+    \node[draw=azul,rounded corners,fill=azul!8,right=of x,minimum width=2.4cm] (p) {programa de $f$};
+    \node[draw=verde,rounded corners,fill=verde!10,right=of p,minimum width=2.4cm] (y) {$f(x)+f'(x)\,\varepsilon$};
+    \draw[-Latex,thick,azul] (x) -- (p);
+    \draw[-Latex,thick,azul] (p) -- (y);
+  \end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Passo complexo e dual: a mesma construção}
+  Números $a+b\,\delta$ com $\delta^2=\sigma$. \ $\sigma=0$: duais. \ $\sigma=-1$: complexos.
+  \[
+    f(x+h\delta) = \underbrace{\Big[f + \sigma\tfrac{h^2}{2}f'' + \sigma^2\tfrac{h^4}{24}f^{(4)}+\cdots\Big]}_{\text{parte ``real''}}
+    + \underbrace{\Big[h f' + \sigma\tfrac{h^3}{6}f''' + \sigma^2\tfrac{h^5}{120}f^{(5)}+\cdots\Big]}_{\text{coeficiente de }\delta}\delta
+  \]
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \begin{exampleblock}{Duais ($\sigma=0$)}
+      Só o primeiro termo de cada colchete sobrevive. Exatidão \textbf{estrutural}, sem depender de $h$.
+    \end{exampleblock}
+    \column{0.48\textwidth}
+    \begin{block}{Complexos ($\sigma=-1$)}
+      A série não termina: termos ímpares ``vazam'' para a parte imaginária. Com $h=10^{-30}$ o vazamento fica muito abaixo de $u$.
+    \end{block}
+  \end{columns}
+  \vspace{0.5em}
+  \centering
+  \alert{O passo complexo é um ``quase dual''}: chega a $u$ pela escolha de $h$; o dual chega pela álgebra.\\
+  {\small Vantagem do ``quase'': complexos já existem em toda linguagem e biblioteca, inclusive LAPACK.}
+\end{frame}
+
+\begin{frame}[fragile]{Implementação: a classe \texttt{Dual} (B1)}
+\begin{columns}[T]
+\column{0.56\textwidth}
+\begin{lstlisting}
+class Dual:
+    def __init__(self, re, du=0.0):
+        self.re = re   # valor da função
+        self.du = du   # derivada
+
+    # (a+bε)(c+dε) = ac + (ad+bc)ε
+    def __mul__(self, o):
+        o = Dual._d(o)
+        return Dual(self.re * o.re,
+            self.re * o.du + self.du * o.re)
+
+    # g(a+bε) = g(a) + g'(a)·b·ε
+    def sin(self):
+        return Dual(sin(self.re),
+                    cos(self.re) * self.du)
+
+def deriv_dual(f, x):
+    return f(Dual(x, 1.0)).du
+\end{lstlisting}
+\column{0.42\textwidth}
+\small
+\textbf{Decisões de projeto}
+\begin{itemize}
+  \item \texttt{re}, \texttt{du} genéricos: \texttt{float}, arrays, tensores ou \emph{outros} \texttt{Dual} (aninhamento $\Rightarrow$ derivadas de ordem superior).
+  \item \textbf{Vetorizada}: \texttt{du} com forma $(k,n)$; semente $\texttt{du}=I_n$ dá as $n$ parciais numa passada.
+  \item \texttt{\_\_array\_ufunc\_\_}: \texttt{np.exp}, \texttt{np.abs}, \texttt{A @ d} funcionam com duais.
+\end{itemize}
+\end{columns}
+\end{frame}
+
+% =====================================================================
+\section{Limites: o custo em generalidade}
+
+\begin{frame}{Cinco funções de teste (B2)}
+  \centering\small
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{L{6.0cm}L{3.4cm}L{3.4cm}}
+    \toprule
+    Função & Passo complexo & Dual \\
+    \midrule
+    1. $e^x/(\cos^3x+\sin^3x)$, $x=1{,}5$ & $1{,}2\times10^{-16}$ & $0$ \\
+    2. $x^x\log(1+x^2)$, $x=2$ & $1{,}3\times10^{-16}$ & $0$ \\
+    3. $\sqrt a$ por 40 iterações de Newton & $0$ & $0$ \\
+    4a. $|x-1|e^x$ com \texttt{np.abs}, $x=0{,}5$ & \textcolor{laranja}{falha}: $+0{,}824$ & correto ($-0{,}824$) \\
+    4b. idem com \texttt{abs\_cs} & correto & correto \\
+    4c. idem em $x=1$ (não diferenciável) & $e$ (lateral direita) & $e$ (lateral direita) \\
+    5. $\mathbf 1^\top(A_0+xB_0)^{-1}b_0$ via \texttt{np.linalg.solve} & $1{,}5\times10^{-16}$ & \textcolor{laranja}{falha} (LAPACK) \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.6em}
+
+  \raggedright
+  Funções 1--3: ambos chegam a $\sim u$. A 3 mostra que derivamos \textbf{programas}, com laços, e não fórmulas.
+\end{frame}
+
+\begin{frame}{Função 4: \texttt{abs} apaga a derivada em silêncio}
+  \begin{itemize}
+    \item Para complexos, \texttt{np.abs} calcula o módulo $\sqrt{\Re^2+\Im^2}$, que é \textbf{real}.
+    \item A parte imaginária de $x-1$ (que carregava a derivada) é jogada fora.
+    \item Resultado com sinal e valor errados \alert{longe} do ponto singular, sem nenhum aviso.
+  \end{itemize}
+  \begin{block}{Correção de Martins et al.\ (2003)}
+    \centering $\mathrm{abs\_cs}(z) = \begin{cases}-z, & \Re z<0\\ \ \ z, & \text{caso contrário}\end{cases}$
+  \end{block}
+  \begin{itemize}
+    \item Mesmas armadilhas: \texttt{max}/\texttt{min}, comparações, conjugação ($x\bar x$ no lugar de $x^2$).
+    \item Em $x=1$, os dois métodos devolvem a derivada lateral à direita, $e$, sem avisar que $f'$ não existe.
+    \item Extra: $\sqrt{x^2}$ em $0$ dá \texttt{nan} no dual e $1$ no passo complexo. A derivada depende do \emph{programa}.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Função 5: código compilado}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \begin{exampleblock}{Passo complexo funciona}
+      O LAPACK tem rotinas complexas (\texttt{zgesv}). A extensão analítica de $x\mapsto A(x)^{-1}b$ é a inversão em aritmética complexa.
+    \end{exampleblock}
+    \column{0.48\textwidth}
+    \begin{alertblock}{\texttt{Dual} falha}
+      \texttt{solve} converte a entrada num \texttt{ndarray} numérico. Nem \texttt{Dual} de matrizes nem matriz de \texttt{Dual}s (\texttt{dtype=object}) são tipos que o código compilado conheça.
+    \end{alertblock}
+  \end{columns}
+  \vspace{0.8em}
+  \textbf{Saída:} uma regra de derivada para a rotina inteira. De $My=r$:
+  \[
+    M\,\mathrm dy = \mathrm dr - \mathrm dM\,y \qquad\Longrightarrow\qquad \text{um segundo \texttt{solve} com a mesma } M.
+  \]
+  Implementado em \texttt{solve\_dual} (erro $\sim u$). É assim que PyTorch e JAX tratam álgebra linear.
+\end{frame}
+
+\begin{frame}{Segunda derivada pelo passo complexo (A3)}
+  \begin{columns}[c]
+    \column{0.5\textwidth}
+    Da parte real:
+    \[ f''(x)\approx\frac{2\,[\alert{f(x)-\Re f(x+ih)}]}{h^2} \]
+    \begin{itemize}
+      \item A subtração \textbf{volta}: dois números de tamanho $|f|$ que diferem em $O(h^2)$.
+      \item $E(h)\approx\frac{h^2}{12}|f^{(4)}| + \frac{4u|f|}{h^2}$
+      \item $h^\ast\sim u^{1/4}$, \ $E(h^\ast)\sim u^{1/2}$
+      \item Mesmo ``V'' da centrada de 2ª ordem: erro relativo $\sim10^{-8}$ em $h\approx10^{-4}$.
+      \item Dual aninhado: $4{,}9\times10^{-16}$, sem $h$.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \includegraphics[width=\textwidth]{a3_segunda_derivada.pdf}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{E se o passo for inclinado?}
+  Com passo puramente imaginário, só $f'$ sai livre de cancelamento. Mas o passo pode ser \textbf{inclinado}: $\omega = e^{i\pi/4}$, com $\omega^2=i$.
+  \[
+    \frac{\Im\big[f(x+\omega h) + f(x-\omega h)\big]}{h^2} = f''(x) - \frac{h^4}{360}f^{(6)}(x) + \cdots
+  \]
+  {\small (Lai e Crassidis, 2008)}
+  \vspace{0.4em}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{itemize}
+      \item Não subtrai termos $O(1)$ como $f(x)$.
+      \item Ainda cancela termos $O(h)$: os $\pm hf'/\sqrt2$.
+      \item Melhora muito, mas \alert{não chega a $u$}.
+    \end{itemize}
+    \column{0.44\textwidth}
+    \small
+    \begin{tabular}{lc}
+      \toprule
+      método & melhor erro rel. \\
+      \midrule
+      parte real & $\approx2{,}6\times10^{-8}$ \\
+      passo inclinado & $\approx1{,}9\times10^{-12}$ \\
+      dual aninhado & $\approx5\times10^{-16}$ \\
+      \bottomrule
+    \end{tabular}
+  \end{columns}
+  \vspace{0.6em}
+  Derivadas superiores com erro $u$: várias unidades independentes (multicomplexos) ou duais aninhados/hiperduais.
+\end{frame}
+
+% =====================================================================
+\section{Gradientes: o custo em implementação}
+
+\begin{frame}{Gradiente em $\mathbb R^{100}$ (C2)}
+  $f(x) = \tfrac12x^\top Ax - b^\top x$, \ $A$ aleatória não simétrica, \ $\nabla f = \tfrac12(A+A^\top)x - b$.
+  \vspace{0.4em}
+
+  \centering\small
+  \renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{lccc}
+    \toprule
+    Método & avaliações & erro rel. & tempo / tempo($f$) \\
+    \midrule
+    diferenças centradas & 200 reais & $3{,}8\times10^{-11}$ & $\approx420$ \\
+    passo complexo & 100 complexas & $3{,}1\times10^{-16}$ & $\approx460$ \\
+    \texttt{Dual} vetorizada & 1 (100 direções) & $2{,}1\times10^{-16}$ & $\approx15$ \\
+    \texttt{torch.func.jacfwd} & 1 (vetorizada) & $2{,}1\times10^{-16}$ & $\approx140$ \\
+    \texttt{torch.autograd} (reverso) & 1 direta + 1 reversa & $4{,}2\times10^{-16}$ & $\approx12$ \\
+    \bottomrule
+  \end{tabular}
+  \vspace{0.6em}
+
+  \raggedright
+  Como $f$ é quadrática, $f'''\equiv0$: os $10^{-11}$ da centrada são \alert{puro cancelamento}.
+\end{frame}
+
+\begin{frame}{Modo direto $O(n)$ $\times$ modo reverso $O(1)$}
+  \begin{columns}[T]
+    \column{0.48\textwidth}
+    \textbf{Modo direto} (FD, complexo, dual)
+    \begin{itemize}
+      \item Cada passada dá uma derivada direcional $\nabla f\cdot v$.
+      \item Gradiente: $n$ direções $\Rightarrow$ custo $\approx n\cdot$custo$(f)$.
+      \item Dual vetorizada: uma passada, mas \texttt{A @ du} vira matriz$\times$matriz ($n^3$).
+      \item Calcula $Jv$: \textbf{uma coluna} por vez.
+    \end{itemize}
+    \column{0.48\textwidth}
+    \textbf{Modo reverso}
+    \begin{itemize}
+      \item Ida: avalia $f$ e grava a ``fita''.
+      \item Volta: propaga adjuntos $\bar v_i \mathrel{+}= \bar v_j\,\partial\phi_j/\partial v_i$, a partir de $\bar f=1$.
+      \item Custo $\le c\cdot$custo$(f)$, $c\approx3$--$5$, \alert{independente de $n$}.
+      \item Calcula $v^\top J$: \textbf{uma linha} por vez.
+    \end{itemize}
+  \end{columns}
+  \vspace{0.8em}
+  \begin{block}{}
+    Para $f:\mathbb R^n\to\mathbb R$, $J$ tem $n$ colunas e \textbf{uma} linha. O preço do reverso é memória: a fita cresce com o número de operações.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Escalonamento com a dimensão}
+  \centering
+  \includegraphics[height=0.72\textheight]{c2_escalonamento.pdf}\\
+  \small Tempo(gradiente)/tempo($f$) para $n$ de 10 a 1000. Passo complexo segue a reta $\propto n$; o reverso fica abaixo de uma constante. Para $n$ pequeno, o custo fixo de cada chamada domina.
+\end{frame}
+
+\begin{frame}{Pontos não diferenciáveis: cada ferramenta escolhe (C3)}
+  \begin{columns}[c]
+    \column{0.48\textwidth}
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{lc}
+      \toprule
+      Cálculo em $x=0$ & resultado \\
+      \midrule
+      \texttt{jax.grad(jnp.abs)} & $1$ \\
+      \texttt{torch.abs} + \texttt{backward} & $0$ \\
+      \texttt{Dual} / \texttt{abs\_cs} & $1$ \\
+      passo complexo + \texttt{np.abs} & $0$ \\
+      \texttt{jax.grad} de $\sqrt{x^2}$ & \texttt{nan} \\
+      \texttt{jax.grad} de $\max(x,0)$ & $0{,}5$ \\
+      \bottomrule
+    \end{tabular}
+    \column{0.48\textwidth}
+    \begin{itemize}
+      \item Subdiferencial de $|x|$ em $0$: $[-1,1]$.
+      \item JAX: ramo $x\ge0$ (lateral direita).
+      \item PyTorch: $\operatorname{sign}(0)=0$ (subgradiente de norma mínima).
+      \item $\max$ no JAX: divide igualmente entre empatados.
+    \end{itemize}
+    \vspace{0.5em}
+    \begin{alertblock}{Lição}
+      AD devolve a derivada exata \emph{do programa no ramo executado}. Em pontos de quebra, o resultado é convenção, não matemática.
+    \end{alertblock}
+  \end{columns}
+\end{frame}
+
+% =====================================================================
+\section{Conclusões}
+
+\begin{frame}{Resumo comparativo}
+  \centering\footnotesize
+  \renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{L{2.2cm}L{2.2cm}L{2.8cm}L{2.8cm}L{2.6cm}}
+    \toprule
+    & Dif.\ finitas & Passo complexo & AD direta (duais) & AD reversa \\
+    \midrule
+    Melhor erro & $u^{p/(p+1)}$ & $\sim u$ & $\sim u$ & $\sim u$ \\
+    Parâmetro $h$ & crítico & irrelevante ($h\ll\sqrt u$) & não há & não há \\
+    Exige de $f$ & só avaliar & analítica, código \emph{complex-safe} & operações sobrecarregáveis & idem, mais fita \\
+    Código compilado & sim & se aceitar complexos & só com regra própria & só com regra própria \\
+    Gradiente em $\mathbb R^n$ & $n$ ou $2n$ aval. & $n$ aval.\ complexas & $n$ direções & $O(1)$ aval., memória $O(\#\text{ops})$ \\
+    2ª derivada & cancelamento & cancelamento volta & exata (aninhado) & exata (aninhado) \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Respostas à pergunta central}
+  \begin{enumerate}
+    \setlength{\itemsep}{0.6em}
+    \item \textbf{Por que diferenças finitas nunca atingem $u$:} ser exata em constantes obriga a subtrair valores próximos de $f$; isso gera $u|f|/h$, e o equilíbrio com $Ch^p$ limita o erro a $u^{p/(p+1)}$.
+    \item \textbf{Passo complexo:} empurra a perturbação para uma direção ``ortogonal'', onde $f'$ aparece isolada. Sem subtração, sem $u/h$; o truncamento some com $h$ minúsculo.
+    \item \textbf{AD:} troca $i^2=-1$ por $\varepsilon^2=0$. A série de Taylor fica finita, não há truncamento, e o único erro é o arredondamento da própria aritmética.
+    \item \textbf{O custo:} o passo complexo exige analiticidade e código \emph{complex-safe}, mas atravessa bibliotecas complexas. A AD exige que tudo passe pela sobrecarga (ou tenha regra própria), mas permite o modo reverso, o único com gradiente a custo $O(1)$. Nenhum resolve pontos não diferenciáveis.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Referências}
+  \small
+  \begin{itemize}
+    \item W.~Squire e G.~Trapp. Using complex variables to estimate derivatives of real functions. \emph{SIAM Review}, 40(1):110--112, 1998.
+    \item J.~R.~R.~A. Martins, P.~Sturdza e J.~J. Alonso. The complex-step derivative approximation. \emph{ACM TOMS}, 29(3):245--262, 2003.
+    \item A.~G. Baydin, B.~A. Pearlmutter, A.~A. Radul e J.~M. Siskind. Automatic differentiation in machine learning: a survey. \emph{JMLR}, 18(153):1--43, 2018.
+    \item A.~Griewank e A.~Walther. \emph{Evaluating Derivatives}. 2.\,ed., SIAM, 2008.
+    \item K.-L. Lai e J.~L. Crassidis. Extensions of the first and second complex-step derivative approximations. \emph{J. Comput. Appl. Math.}, 219:276--293, 2008.
+    \item N.~J. Higham. \emph{Accuracy and Stability of Numerical Algorithms}. 2.\,ed., SIAM, 2002.
+  \end{itemize}
+  \vfill
+  \centering\Large\color{azul}\textbf{Perguntas?}
+\end{frame}
+
+\end{document}
