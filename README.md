@@ -1,6 +1,6 @@
 # Diferenciação automática e passo complexo
 
-Trabalho de cunho avaliativo para a disciplina Computação Científica do IM-UFRJ: seminário sobre diferenciação automática (AD), passo complexo e diferenças finitas.
+Trabalho de cunho avaliativo para a disciplina Computação Científica orientada pelo professor Heudson Mirandola do IM-UFRJ: seminário sobre diferenciação automática (AD), passo complexo e diferenças finitas.
 
 **Pergunta central:** por que diferenças finitas nunca atingem erro da ordem do arredondamento unitário *u*, e o que exatamente o passo complexo e a AD fazem para atingi-lo? Qual é o custo em generalidade (tipos de *f* aceitos) e em implementação?
 
