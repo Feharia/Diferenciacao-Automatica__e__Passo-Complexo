@@ -9,9 +9,9 @@ Trabalho de cunho avaliativo para a disciplina Computação Científica orientad
 | Pasta | O que tem |
 |---|---|
 | `relatorio/` | Relatório completo (`relatorio.tex` / `.pdf`), recorte só com a teoria (`relatorio_teoria.tex` / `.pdf`) e as figuras geradas pelo notebook (`figuras/`) |
-| `notebook/` | `experimentos_ad.ipynb`: classe `Dual`, passo complexo, experimentos B1–B2 e C1–C3 (PyTorch, NumPy, JAX) |
+| `notebook/` | `Automatic_Differentiation_Revisado.ipynb` (notebook de Lucas Carvalhosa Lago, base do relatório e dos slides): classe `Dual`, passo complexo, experimentos B1–B2, A3, C1–C3 e D1 (NumPy, JAX, PyTorch). `experimentos_ad.ipynb` é a versão anterior |
 | `apresentacao/` | Slides em Beamer (`slides.tex` / `slides.pdf`), roteiro de cerca de 45 minutos |
-| `revisao/` | Revisão da parte teórica (correções ainda não aplicadas ao relatório) |
+| `revisao/` | Revisão da parte teórica |
 | `PLANO.md` | Plano de trabalho e roteiro da apresentação |
 
 ## Como compilar
@@ -30,10 +30,10 @@ Para limpar os arquivos auxiliares: `latexmk -c`.
 
 ```bash
 pip install numpy matplotlib torch "jax[cpu]" jupyter
-jupyter notebook notebook/experimentos_ad.ipynb
+jupyter notebook notebook/Automatic_Differentiation_Revisado.ipynb
 ```
 
-As figuras do relatório e dos slides são geradas pelo notebook em `relatorio/figuras/`.
+As figuras do relatório e dos slides são geradas pelo notebook em `relatorio/figuras/notebook_original/`.
 
 ## Referências principais
 
